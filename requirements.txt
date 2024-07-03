@@ -1,0 +1,6 @@
+splinter
+beautifulsoup4
+pandas
+matplotlib
+telegram
+telebot
