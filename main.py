@@ -1,58 +1,67 @@
 import os
-from dotenv import load_dotenv
-from telebot import types
-import telebot
-from splinter import Browser
-from bs4 import BeautifulSoup as soup
-import pandas as pd
 import time
-import prettytable as pt
+from bs4 import BeautifulSoup as soup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import telebot
+from telebot import types
+from dotenv import load_dotenv
+
+#Vehiculos
+vehicles={"description": "", "price": 0, "url": ""}
 
 
-browser= Browser('chrome') #Creating the chrome browser instance
-
-#Parameters Variables
-location="miami"
-category="vehicles"
-# mark="Honda"
-# model="Civic"
-days_listed=7
-minPrice=100
-maxPrice=5000
-# itemCondition="used_like_new" #Expects: new, used_fair, used_like_new, used_good
-exact=False 
-
-#URL
-base_url=f"https://www.facebook.com/marketplace/{location}/{category}?"
-url=f'{base_url}minPrice={minPrice}&maxPrice={maxPrice}&daysSinceListed={days_listed}&exact={exact}'
-# print(url)
-browser.visit(url)
-time.sleep(5) #Waiting for the page to load completely...
-#Parse HTML
-html=browser.html
-browser.quit()
-market_soup=soup(html,'html.parser')
+# Variables de Parámetros
+location = "miami"
+category = "vehicles"
+mark_model=""
+days_listed = 1
+minPrice = 0
+maxPrice = 0
+exact = False 
 
 
-
-#Extracting Titles List...
-titles_div=market_soup.find_all('span',class_="x1lliihq x6ikm8r x10wlt62 x1n2onr6")
-titles_list=[title.text.strip() for title in titles_div]
+# https://www.facebook.com/marketplace/miami/search?daysSinceListed=1&minPrice=500&maxPrice=1000&query=honda%20civic&exact=false
 
 
-#Extracting Prices List...
-prices_div=market_soup.find_all('span',class_="x193iq5w xeuugli x13faqbe x1vvkbs x1xmvt09 x1lliihq x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x xudqn12 x676frb x1lkfr7t x1lbecb7 x1s688f xzsf02u")
-prices_list=[price.text.strip() for price in prices_div]
+# URL
+base_url = f"https://www.facebook.com/marketplace/{location}/{category}?daysSinceListed={days_listed}"
+url = f'{base_url}'
 
+def GetMarketInfo(url):
+    """
+    url (str)
+    Esta función obtiene la información de los vehículos del Facebook MarketPlace
+    """
+    global vehicles
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Activar el modo headless
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    
+    browser = webdriver.Chrome(options=chrome_options)
+    browser.get(url)
+    time.sleep(5)  # Esperar a que la página cargue completamente...
+    
+    # Parsear el HTML
+    html = browser.page_source
+    browser.quit()
+    market_soup = soup(html, 'html.parser')
+    
+    # Extraer lista de títulos
+    titles_div = market_soup.find_all('span', class_="x1lliihq x6ikm8r x10wlt62 x1n2onr6")
+    titles_list = [title.text.strip() for title in titles_div]
 
+    # Extraer lista de precios
+    prices_div = market_soup.find_all('span', class_="x193iq5w xeuugli x13faqbe x1vvkbs x1xmvt09 x1lliihq x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x xudqn12 x676frb x1lkfr7t x1lbecb7 x1s688f xzsf02u")
+    prices_list = [price.text.strip() for price in prices_div]
 
-#Extracting URLs List...
-urls_div=market_soup.find_all('a',class_="x1i10hfl xjbqb8w x1ejq31n xd10rxx x1sy0etr x17r0tee x972fbf xcfux6l x1qhh985 xm0m39n x9f619 x1ypdohk xt0psk2 xe8uvvx xdj266r x11i5rnm xat24cr x1mh8g0r xexx8yu x4uap5 x18d9i69 xkhd6sd x16tdsg8 x1hl2dhg xggy1nq x1a2a7pz x1heor9g x1sur9pj xkrqix3 x1lku1pv")
-urls_list=[ "https://facebook.com"+url.get('href') for url in urls_div]
+    # Extraer lista de URLs
+    urls_div = market_soup.find_all('a', class_="x1i10hfl xjbqb8w x1ejq31n xd10rxx x1sy0etr x17r0tee x972fbf xcfux6l x1qhh985 xm0m39n x9f619 x1ypdohk xt0psk2 xe8uvvx xdj266r x11i5rnm xat24cr x1mh8g0r xexx8yu x4uap5 x18d9i69 xkhd6sd x16tdsg8 x1hl2dhg xggy1nq x1a2a7pz x1heor9g x1sur9pj xkrqix3 x1lku1pv")
+    urls_list = ["https://facebook.com" + url.get('href') for url in urls_div]
 
-vehicles = [{"description": description, "price": price, "url": url} for description, price, url in zip(titles_list, prices_list, urls_list)]
-
-
+    vehicles = [{"description": description, "price": price, "url": url} for description, price, url in zip(titles_list, prices_list, urls_list)]
+      
 
 # Cargar variables de entorno desde el archivo .env
 load_dotenv()
@@ -64,43 +73,95 @@ TOKEN = os.getenv("MY_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
-
-# Función para el comando /start
 def start_command(message):
-    bot.reply_to(message,'Hola! Soy tu bot de Telegram. ¿En qué puedo ayudarte?')
-    markup=types.ReplyKeyboardMarkup(row_width=2)
-    btn1=types.KeyboardButton('Consultar Vehiculos')
+    bot.reply_to(message, 'Hola! Soy tu bot de Telegram. ¿En qué puedo ayudarte?')
+    markup = types.ReplyKeyboardMarkup(row_width=2)
+    btn1 = types.KeyboardButton('Consultar Vehiculos')
     markup.add(btn1)
-    bot.send_message(message.chat.id,'Elige Una Opcion:',reply_markup=markup)
+    bot.send_message(message.chat.id, 'Elige Una Opcion:', reply_markup=markup)
 
 @bot.message_handler(func=lambda message: message.text == 'Consultar Vehiculos')
-
 def consult_vehicles(message):
-    info=""
-    for vehicle in vehicles[:5]:
-        info+=f"{vehicle['url']}\n\n"
-    #print(tabla_str)
-    # Enviar el mensaje con la tabla
-    bot.send_message(message.chat.id, info,parse_mode="HTML")
+    try:
+        bot.send_message(message.chat.id, '🔎Buscando vehiculos, espere un momento...🔎')
+        # vehicles = GetMarketInfo(url)
+        GetMarketInfo(url)
+        ShowVehicles(message)
+    except Exception as e:
+        print(f"Ocurrió un error: {e}")
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        search_btn = types.InlineKeyboardButton('Volver a buscar...', callback_data='search')
+        markup.add(search_btn)
+        bot.send_message(message.chat.id, 'Ocurrió un error buscando vehículos', reply_markup=markup)
 
-    
-    
+def ShowVehicles(message):
+    for vehicle in vehicles:
+        info = f"{vehicle['description']} - {vehicle['price']} USD\nURL:{vehicle['url']}"
+        bot.send_message(message.chat.id, info, parse_mode="HTML")
     markup = types.InlineKeyboardMarkup(row_width=2)
-    filter_btn = types.InlineKeyboardButton('Agregar Filtros ⚙', callback_data='add_filters')
-    show_more_btn = types.InlineKeyboardButton('Mostrar Más Vehiculos 🚗', callback_data='show_more')
-    markup.add(filter_btn, show_more_btn)
-    bot.send_message(message.chat.id, 'Buscando vehículos...', reply_markup=markup)
+    menu_buttons = [
+            types.InlineKeyboardButton('Agregar Filtros ⚙', callback_data='add_filters'),
+        ]
+    markup.add(*menu_buttons)
+    bot.send_message(message.chat.id, '¿Qué desea hacer?', reply_markup=markup)
 
 
-@bot.callback_query_handler(func=lambda call:True)
+@bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
-    markup=types.ReplyKeyboardMarkup(row_width=2)
-    if call.data=='add_filters':
-        bot.send_message(call.message.chat.id,'Buscando filtros...')
-    elif call.data=='show_more':
-        bot.send_message(call.message.chat.id,'Buscando mas vehiculos...')
+    if call.data == 'search':
+        bot.send_message(call.message.chat.id, 'Buscando vehiculos...')
+        bot.register_next_step_handler(call.message, consult_vehicles)
+    elif call.data == 'add_filters':
+        AddFilters(call)
+    elif call.data == 'f_price':
+        bot.send_message(call.message.chat.id, 'Introduzca el precio mínimo')
+        bot.register_next_step_handler(call.message, get_min_price)
+    elif call.data == 'f_markmodel':
+        bot.send_message(call.message.chat.id, 'Introduzca la marca y el modelo')
 
-if __name__=="__main__":
+
+
+def AddFilters(call):
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    filters_buttons = [
+            types.InlineKeyboardButton('Precios 💵', callback_data='f_price'),
+            types.InlineKeyboardButton('Marca y Modelo 🚙', callback_data='f_markmodel'),
+            types.InlineKeyboardButton('Finalizar y Buscar', callback_data='search'),
+        ]
+    markup.add(*filters_buttons)
+    bot.send_message(call.message.chat.id, 'Introduzca el filtro que desea aplicar', reply_markup=markup)
+
+def get_min_price(message):
+    global minPrice
+    try:
+        minPrice = int(message.text)
+        bot.send_message(message.chat.id, 'Introduzca el precio máximo')
+        bot.register_next_step_handler(message, get_max_price)
+        
+    except ValueError:
+        bot.send_message(message.chat.id, 'Por favor, introduzca un número válido')
+        bot.register_next_step_handler(message, get_min_price)
+
+def get_max_price(message):
+    global maxPrice
+    try:
+        maxPrice = int(message.text)
+        bot.send_message(message.chat.id, f'Filtros aplicados. Min: {minPrice} Max: {maxPrice}\nBuscando...')
+        
+
+        print([(item['description'],item['price'],item['url']) 
+               for item in vehicles if int(item['price'].replace('$', '').replace('.', '').strip())
+               >=minPrice and int(item['price'].replace('$', '').replace('.', '').strip())<=maxPrice])
+    except ValueError:
+        bot.send_message(message.chat.id, 'Por favor, introduzca un número válido')
+        bot.register_next_step_handler(message, get_max_price)
+
+
+
+if __name__ == "__main__":
     bot.polling(none_stop=True)
 
 
+#----------------------
+#TODO: Crear Filtros
+#----------------------
