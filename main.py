@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 #Vehiculos
 vehicles={"description": "", "price": 0, "url": ""}
+f_vehicles={"description": "", "price": 0, "url": ""}
 
 
 # Variables de Parámetros
@@ -34,18 +35,39 @@ def GetMarketInfo(url):
     Esta función obtiene la información de los vehículos del Facebook MarketPlace
     """
     global vehicles
+    # chrome_options = Options()
+    # chrome_options.add_argument("--headless")  # Activar el modo headless
+    # chrome_options.add_argument("--disable-gpu")
+    # chrome_options.add_argument("--no-sandbox")
+    
     chrome_options = Options()
     chrome_options.add_argument("--headless")  # Activar el modo headless
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-infobars")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("start-maximized")
+    chrome_options.add_argument("disable-infobars")
+    chrome_options.add_argument("--disable-plugins-discovery")
+    chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("disable-infobars")
+    chrome_options.add_argument("--disable-logging")
     
+    # Deshabilitar la carga de imágenes
+    prefs = {"profile.managed_default_content_settings.images": 2}
+    chrome_options.add_experimental_option("prefs", prefs)
+
+
+
     browser = webdriver.Chrome(options=chrome_options)
     browser.get(url)
     time.sleep(5)  # Esperar a que la página cargue completamente...
     
     # Parsear el HTML
     html = browser.page_source
-    browser.quit()
+    browser.close()
     market_soup = soup(html, 'html.parser')
     
     # Extraer lista de títulos
@@ -83,10 +105,10 @@ def start_command(message):
 @bot.message_handler(func=lambda message: message.text == 'Consultar Vehiculos')
 def consult_vehicles(message):
     try:
-        bot.send_message(message.chat.id, '🔎Buscando vehiculos, espere un momento...🔎')
+        bot.send_message(message.chat.id, 'Buscando vehiculos, espere un momento... 🔎')
         # vehicles = GetMarketInfo(url)
         GetMarketInfo(url)
-        ShowVehicles(message)
+        ShowVehicles(message,vehicles)
     except Exception as e:
         print(f"Ocurrió un error: {e}")
         markup = types.InlineKeyboardMarkup(row_width=2)
@@ -94,9 +116,9 @@ def consult_vehicles(message):
         markup.add(search_btn)
         bot.send_message(message.chat.id, 'Ocurrió un error buscando vehículos', reply_markup=markup)
 
-def ShowVehicles(message):
-    for vehicle in vehicles:
-        info = f"{vehicle['description']} - {vehicle['price']} USD\nURL:{vehicle['url']}"
+def ShowVehicles(message,dict):
+    for item in dict:
+        info = f"{item['description']} - {item['price']} USD\nURL:{item['url']}"
         bot.send_message(message.chat.id, info, parse_mode="HTML")
     markup = types.InlineKeyboardMarkup(row_width=2)
     menu_buttons = [
@@ -118,6 +140,8 @@ def callback_query(call):
         bot.register_next_step_handler(call.message, get_min_price)
     elif call.data == 'f_markmodel':
         bot.send_message(call.message.chat.id, 'Introduzca la marca y el modelo')
+        bot.register_next_step_handler(call.message,getMarkModel)
+
 
 
 
@@ -143,25 +167,29 @@ def get_min_price(message):
         bot.register_next_step_handler(message, get_min_price)
 
 def get_max_price(message):
-    global maxPrice
+    global maxPrice,f_vehicles
     try:
         maxPrice = int(message.text)
         bot.send_message(message.chat.id, f'Filtros aplicados. Min: {minPrice} Max: {maxPrice}\nBuscando...')
-        
-
-        print([(item['description'],item['price'],item['url']) 
+        f_vehicles=[{"description":item['description'],"price":item['price'],"url":item['url']}
                for item in vehicles if int(item['price'].replace('$', '').replace('.', '').strip())
-               >=minPrice and int(item['price'].replace('$', '').replace('.', '').strip())<=maxPrice])
+               >=minPrice and int(item['price'].replace('$', '').replace('.', '').strip())<=maxPrice]
+        bot.send_message(message.chat.id,f'Se han encontrado {len(f_vehicles)} Vehiculos!')
+        # print(f_vehicles)
+        ShowVehicles(message=message,dict=f_vehicles)
     except ValueError:
         bot.send_message(message.chat.id, 'Por favor, introduzca un número válido')
         bot.register_next_step_handler(message, get_max_price)
 
-
+def getMarkModel(message):
+    global f_vehicles,vehicles
+    f_vehicles=[{'description':item['description'],'price':item['price'],'url':item['url']}
+                 for item in vehicles if message.text.lower() in item['description'].lower()]
+    bot.send_message(message.chat.id,f'Se han encontrado {len(f_vehicles)} Vehiculos!')
+    # print(f_vehicles)
+    ShowVehicles(message=message,dict=f_vehicles)
 
 if __name__ == "__main__":
+    print('\033[1m'+'\033[92m'+"Bot Iniciado")
+    
     bot.polling(none_stop=True)
-
-
-#----------------------
-#TODO: Crear Filtros
-#----------------------
