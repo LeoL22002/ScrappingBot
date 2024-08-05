@@ -6,6 +6,8 @@ from selenium.webdriver.chrome.options import Options
 import telebot
 from telebot import types
 from dotenv import load_dotenv
+import mysql.connector
+
 
 #Vehiculos
 vehicles={"description": "", "price": 0, "url": ""}
@@ -88,14 +90,39 @@ def GetMarketInfo(url):
 # Cargar variables de entorno desde el archivo .env
 load_dotenv()
 
-# Obtener el token de Telegram desde la variable de entorno
+# Variables de entorno
 TOKEN = os.getenv("MY_TOKEN")
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
+
+# Variables para manejar base de datos
+db=None
+cursor=None
+
+# Datos del usuario
+  
+user_id = ""
+user = ""
+username=""
+
 
 # Crear una instancia del bot de Telegram
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def start_command(message):
+    global db,cursor,user_id,user,username
+    user_id = message.from_user.id
+    user = message.from_user.username
+    username = message.from_user.first_name +" "+message.from_user.last_name
+
+    db=connect_to_database()
+    if(db is not None):
+        cursor=db.cursor()
+        user_start()
+    
     bot.reply_to(message, 'Hola! Soy tu bot de Telegram. ¿En qué puedo ayudarte?')
     markup = types.ReplyKeyboardMarkup(row_width=2)
     btn1 = types.KeyboardButton('Consultar Vehiculos')
@@ -145,12 +172,13 @@ def callback_query(call):
 
 
 
+
 def AddFilters(call):
     markup = types.InlineKeyboardMarkup(row_width=2)
     filters_buttons = [
             types.InlineKeyboardButton('Precios 💵', callback_data='f_price'),
             types.InlineKeyboardButton('Marca y Modelo 🚙', callback_data='f_markmodel'),
-            types.InlineKeyboardButton('Finalizar y Buscar', callback_data='search'),
+            types.InlineKeyboardButton('Tienda 🛒', callback_data='market_type'),
         ]
     markup.add(*filters_buttons)
     bot.send_message(call.message.chat.id, 'Introduzca el filtro que desea aplicar', reply_markup=markup)
@@ -189,7 +217,52 @@ def getMarkModel(message):
     # print(f_vehicles)
     ShowVehicles(message=message,dict=f_vehicles)
 
+
+def connect_to_database():
+    try:
+        # Conectar a la base de datos MySQL
+        db = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        # print("Conexión a la base de datos establecida correctamente.")
+        return db
+    except mysql.connector.Error as err:
+        # print(f"Error al conectar a la base de datos: {err}")
+        return None
+    
+def user_start():
+
+    if(user_exists(_user_id=user_id)):
+       try:
+        cursor.execute('INSERT INTO users_sessions (user) VALUES (%s)',(user_id,))
+       except  mysql.connector.Error as err:
+           print(f"Error: {err}")
+    else:
+         try:
+            cursor.execute('INSERT INTO users (id,user,username,status) VALUES (%s,%s,%s,%s)',(user_id,user,username,1))
+         except mysql.connector.Error as err:
+            print(f"Error: {err}")
+    
+    db.commit()
+    
+def user_exists(_user_id):
+    try:
+        query="SELECT * FROM users where id=%s limit 1"
+        cursor.execute(query,(_user_id,))
+        return cursor.fetchone() is not None
+    except mysql.connector.Error as err:
+        print(f"Error al verificar el usuario en la base de datos: {err}")
+        return False
+    
+
 if __name__ == "__main__":
     print('\033[1m'+'\033[92m'+"Bot Iniciado")
     
     bot.polling(none_stop=True)
+
+
+#TODO: Agregar nuevo filtro para la tienda en la que desea buscar
+#TODO: Agregar nuevo filtro para la ubicacion
